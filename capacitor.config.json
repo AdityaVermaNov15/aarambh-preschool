@@ -1,0 +1,7 @@
+{
+  "appId": "in.aarambh.preschool",
+  "appName": "Aarambh",
+  "webDir": "www",
+  "server": { "androidScheme": "https" },
+  "ios": { "contentInset": "never" }
+}

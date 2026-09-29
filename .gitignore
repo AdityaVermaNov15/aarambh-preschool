@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+*.log
+.env
+.env.*
+supabase/.temp/
+supabase/.branches/
+android/app/build/
+android/.gradle/
+ios/App/Pods/
+ios/App/build/
