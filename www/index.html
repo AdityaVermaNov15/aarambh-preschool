@@ -11,6 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Aarambh">
+<meta name="format-detection" content="telephone=no">
 <title>Aarambh Pre School</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -353,6 +354,20 @@ a.btn{text-decoration:none}
 .kv dt{color:var(--muted);font-size:.88rem}
 .kv dd{margin:0;font-weight:500;word-break:break-word}
 button,.media,.tile,.chip,a{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+@supports not (background: color-mix(in srgb, red 50%, blue)) {
+  .top{background:var(--bg)}
+  .day.today{box-shadow:0 0 0 2px var(--sun)}
+}
+@supports not (inset: 0) {
+  .sheet-bg,#drawer,#drawer .dbg,#cam,#story,.camstage video,.camstage img,.sstage img,.sstage video,.pop{top:0;right:0;bottom:0;left:0}
+  .gal .play{top:auto;left:auto;right:6px;bottom:6px}
+  .gal .lock{top:6px;left:6px;right:auto;bottom:auto}
+}
+@supports not (aspect-ratio: 1) {
+  .media{height:118vw;max-height:620px}
+  .gal button{height:32vw;max-height:200px}
+  .starcard .ph{height:170px}
+}
 #toast{z-index:95!important;position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;background:#1B2340;color:#fff;padding:10px 16px;border-radius:12px;font-weight:500;max-width:90vw;box-shadow:0 6px 20px rgba(0,0,0,.25)}
 #toast[hidden]{display:none}
 .scroll-x{overflow-x:auto}
@@ -381,6 +396,27 @@ const DAYNAMES = {Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:
 const MEALS = [["breakfast","Breakfast"],["lunch","Lunch"],["snack","Snack"]];
 const COLLS = ["members","students","attStudents","attStaff","meals","plans","datesheet","notices","holidays","tickets","gallery","toppers","stories"];
 const ROLE_LABEL = {admin:"Admin",staff:"Teacher / Staff",parent:"Parent"};
+const CFG = Object.assign({ timeZone: "Asia/Kolkata", currency: "INR", locale: "en-IN", countryCode: "+91", privacyUrl: "" }, window.AARAMBH_CONFIG || {});
+const COUNTRY_CODES = [["+91","🇮🇳","India"],["+977","🇳🇵","Nepal"],["+880","🇧🇩","Bangladesh"],["+94","🇱🇰","Sri Lanka"],["+92","🇵🇰","Pakistan"],["+975","🇧🇹","Bhutan"],["+960","🇲🇻","Maldives"],
+  ["+971","🇦🇪","UAE"],["+966","🇸🇦","Saudi Arabia"],["+974","🇶🇦","Qatar"],["+968","🇴🇲","Oman"],["+965","🇰🇼","Kuwait"],["+973","🇧🇭","Bahrain"],
+  ["+65","🇸🇬","Singapore"],["+60","🇲🇾","Malaysia"],["+66","🇹🇭","Thailand"],["+62","🇮🇩","Indonesia"],["+63","🇵🇭","Philippines"],["+852","🇭🇰","Hong Kong"],["+81","🇯🇵","Japan"],["+82","🇰🇷","South Korea"],["+86","🇨🇳","China"],
+  ["+61","🇦🇺","Australia"],["+64","🇳🇿","New Zealand"],["+44","🇬🇧","United Kingdom"],["+353","🇮🇪","Ireland"],["+49","🇩🇪","Germany"],["+33","🇫🇷","France"],["+31","🇳🇱","Netherlands"],["+39","🇮🇹","Italy"],["+34","🇪🇸","Spain"],["+41","🇨🇭","Switzerland"],["+46","🇸🇪","Sweden"],
+  ["+1","🇺🇸","USA / Canada"],["+52","🇲🇽","Mexico"],["+55","🇧🇷","Brazil"],["+27","🇿🇦","South Africa"],["+254","🇰🇪","Kenya"],["+234","🇳🇬","Nigeria"],["+20","🇪🇬","Egypt"],["+255","🇹🇿","Tanzania"],["+256","🇺🇬","Uganda"]];
+function e164(cc, num) {
+  const raw = String(num || "").trim();
+  let d;
+  if (raw.startsWith("+") || raw.startsWith("00")) d = raw.replace(/^00/, "").replace(/\D/g, "");
+  else {
+    const ccd = String(cc || CFG.countryCode).replace(/\D/g, "");
+    let nd = raw.replace(/\D/g, "").replace(/^0+/, "");
+    if (nd.startsWith(ccd) && nd.length > 10 && nd.length >= ccd.length + 8) nd = nd.slice(ccd.length);
+    d = ccd + nd;
+  }
+  if (d.length < 8 || d.length > 15) throw new Error("Enter a valid mobile number and choose the right country code.");
+  return "+" + d;
+}
+const phoneField = () => `<div class="f"><span id="phLbl" style="display:block;font-weight:600;font-size:.9rem;margin-bottom:4px">Mobile number</span><div class="row" style="gap:8px"><select name="cc" aria-label="Country code" style="width:auto;max-width:132px;flex:none">${COUNTRY_CODES.map(([c, f, n]) => `<option value="${c}" ${c === CFG.countryCode ? "selected" : ""}>${f} ${c} ${n}</option>`).join("")}</select><input type="tel" name="phone" required inputmode="tel" autocomplete="tel-national" aria-labelledby="phLbl" placeholder="Mobile number"></div></div>`;
+const money = n => { try { return new Intl.NumberFormat(CFG.locale, { style: "currency", currency: CFG.currency, maximumFractionDigits: 0 }).format(Number(n) || 0); } catch { return CFG.currency + " " + (Number(n) || 0); } };
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -389,7 +425,10 @@ const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2
 const z = n => String(n).padStart(2, "0");
 const ymd = d => d.getFullYear() + "-" + z(d.getMonth() + 1) + "-" + z(d.getDate());
 const parse = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m - 1, d || 1); };
-const today = () => ymd(new Date());
+const today = () => {
+  try { const t = new Intl.DateTimeFormat("en-CA", { timeZone: (window.AARAMBH_CONFIG && window.AARAMBH_CONFIG.timeZone) || "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t; } catch {}
+  return ymd(new Date());
+};
 const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return ymd(d); };
 const weekKey = d => { const x = new Date(d); const day = (x.getDay() + 6) % 7; x.setDate(x.getDate() - day); return ymd(x); };
 const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -512,7 +551,7 @@ const mediaSrc = m => m ? ((m.path && Store.signUrl) ? Store.signUrl(m.path) : m
 const S = {
   ready: false, meId: null, isOwner: false, view: "home", params: {},
   authTab: "login", attDate: today(), attCls: "NUR", attDraft: null,
-  staffDate: today(), staffDraft: null, week: weekKey(new Date()), planCls: "NUR",
+  staffDate: today(), staffDraft: null, week: weekKey(parse(today())), planCls: "NUR",
   dsCls: "all", stuCls: "all", stuQ: "", childId: null, galTab: "all", sheetSubmit: null, feedMuted: true, feedLimit: 10, lastTap: null
 };
 const me = () => S.meId ? Store.get("members", S.meId) : null;
@@ -761,14 +800,15 @@ function viewAuth() {
        <label class="f"><span>Child's class</span><select name="childCls">${CLASSES.map(c => `<option value="${c.id}">${c.name}</option>`).join("")}</select></label></div>`;
   const signup = `<form data-form="signup">
     <label class="f"><span>Full name</span><input type="text" name="name" required autocomplete="name"></label>
-    <label class="f"><span>Mobile number</span><input type="tel" name="phone" required inputmode="tel" autocomplete="tel" pattern="[0-9+ ]{10,15}"></label>
+    ${phoneField()}
     ${cloud ? "" : `<label class="f"><span>Create password</span><input type="password" name="pass" required minlength="6" autocomplete="new-password"></label>`}
     ${roleField}
+    ${CFG.privacyUrl ? `<label class="check small" style="align-items:flex-start"><input type="checkbox" name="consent" required style="margin-top:3px"> <span>I agree to the <a href="${esc(CFG.privacyUrl)}" target="_blank" rel="noopener">Privacy Policy</a> and, as a parent or guardian, consent to the school storing my child's details and photos in this app.</span></label>` : ""}
     <button class="btn block sun">${owner || (!cloud && firstUser) ? "Create admin account" : "Sign up"}</button>
     ${owner || (!cloud && firstUser) ? "" : `<p class="small muted" style="margin-top:10px;text-align:center">The school admin approves new accounts before you can sign in.</p>`}
   </form>`;
   const login = `<form data-form="login">
-    <label class="f"><span>Mobile number</span><input type="tel" name="phone" required inputmode="tel" autocomplete="tel"></label>
+    ${phoneField()}
     <label class="f"><span>Password</span><input type="password" name="pass" required autocomplete="current-password"></label>
     <button class="btn block">Log in</button></form>`;
   return `<div class="auth"><img class="logo" src="${LOGO}" alt="Aarambh Pre School logo, under the auspices of R.L.J.D. Group">
@@ -984,7 +1024,7 @@ function studentProfileHtml(s, forParent) {
     ${!parentsHtml && (forParent || isAdmin()) ? `<button class="btn sm" style="margin-top:10px" data-act="${forParent ? "editContact" : "editStu"}" data-id="${s.id}">Add parent details</button>` : ""}</div></div>
   <div class="section"><h2>Attendance this month</h2><div class="card">${rec.length ? `<div class="row wrap"><span class="tag ok">${c.P} present</span><span class="tag bad">${c.A} absent</span><span class="tag warn">${c.L} leave</span></div><div class="dots">${rec.map(r => `<i class="${r.k}" title="${fmtDate(r.date)}">${parse(r.date).getDate()}</i>`).join("")}</div>` : `<p class="muted">No attendance marked this month yet.</p>`}</div></div>
   <div class="section"><div class="row" style="margin-bottom:10px"><h2 class="grow">Fees</h2>${isAdmin() ? `<button class="btn sm ghost" data-act="addFee" data-id="${s.id}">+ Add fee</button>` : ""}</div>
-  <div class="card">${fees.length ? `<p style="margin-bottom:6px">${due ? `<span class="tag bad">₹${due.toLocaleString("en-IN")} due</span>` : `<span class="tag ok">All paid</span>`}</p><div class="scroll-x"><table class="fees"><thead><tr><th>For</th><th>Amount</th><th>Status</th>${isAdmin() ? "<th></th>" : ""}</tr></thead><tbody>${fees.map(f => `<tr><td>${esc(f.label)}<div class="small muted">${f.date ? fmtDate(f.date) : ""}</div></td><td>₹${Number(f.amount || 0).toLocaleString("en-IN")}</td><td><span class="tag ${f.status === "paid" ? "ok" : "bad"}">${f.status === "paid" ? "Paid" : "Due"}</span></td>${isAdmin() ? `<td><button class="btn sm ghost" data-act="toggleFee" data-id="${s.id}" data-f="${f.id}">${f.status === "paid" ? "Mark due" : "Mark paid"}</button></td>` : ""}</tr>`).join("")}</tbody></table></div>` : `<p class="muted">No fee records yet.</p>`}</div></div>
+  <div class="card">${fees.length ? `<p style="margin-bottom:6px">${due ? `<span class="tag bad">${money(due)} due</span>` : `<span class="tag ok">All paid</span>`}</p><div class="scroll-x"><table class="fees"><thead><tr><th>For</th><th>Amount</th><th>Status</th>${isAdmin() ? "<th></th>" : ""}</tr></thead><tbody>${fees.map(f => `<tr><td>${esc(f.label)}<div class="small muted">${f.date ? fmtDate(f.date) : ""}</div></td><td>${money(f.amount)}</td><td><span class="tag ${f.status === "paid" ? "ok" : "bad"}">${f.status === "paid" ? "Paid" : "Due"}</span></td>${isAdmin() ? `<td><button class="btn sm ghost" data-act="toggleFee" data-id="${s.id}" data-f="${f.id}">${f.status === "paid" ? "Mark due" : "Mark paid"}</button></td>` : ""}</tr>`).join("")}</tbody></table></div>` : `<p class="muted">No fee records yet.</p>`}</div></div>
   ${stars.length ? `<div class="section"><h2>Recognitions</h2><ul class="list">${stars.map(x => `<li><span style="font-size:1.4rem">🏆</span><span class="grow nm">${esc(x.title)}<small>${fmtMonth(x.month)}</small></span></li>`).join("")}</ul></div>` : ""}
   ${moments.length ? `<div class="section"><h2>${clsName(s.cls)} moments</h2><div class="gal">${moments.map(x => `<button data-act="openMedia" data-id="${x.id}" aria-label="${esc(x.caption || "Class photo")}"><img src="${esc(mediaSrc(x))}" alt="" loading="lazy"></button>`).join("")}</div></div>` : ""}`;
 }
@@ -1061,7 +1101,9 @@ function viewProfile() {
   ${kids.length ? `<p style="margin-top:10px"><b>Linked child:</b> ${kids.map(k => esc(k.name) + " (" + clsName(k.cls) + ")").join(", ")}</p>` : ""}</div>
   <div class="card"><div class="row"><div class="grow"><b>Phone alerts</b><p class="small muted">Get a notification when a notice is posted while the app is open.</p></div><button class="btn sm ghost" data-act="notifyOn">Turn on</button></div></div>
   <div class="card"><div class="row"><div class="grow"><b>Appearance</b><p class="small muted">Light, dark, or match your phone.</p></div><select data-change="theme" style="width:auto">${[["", "Match phone"], ["light", "Light"], ["dark", "Dark"]].map(([v, l]) => `<option value="${v}" ${ls.get("theme", "") === v ? "selected" : ""}>${l}</option>`).join("")}</select></div></div>
+  ${CFG.privacyUrl ? `<div class="card row"><div class="grow"><b>Privacy</b><p class="small muted">How the school uses your and your child's information.</p></div><a class="btn sm ghost" href="${esc(CFG.privacyUrl)}" target="_blank" rel="noopener">Read policy</a></div>` : ""}
   <div class="card"><button class="btn ghost block" data-act="editMe">Edit my name and phone</button>${Store.mode !== "cloud" ? `<button class="btn danger block" style="margin-top:10px" data-act="logout">Log out</button>` : ""}</div>
+  <div class="card"><button class="btn danger block" data-act="deleteAccount">Delete my account</button><p class="small muted" style="margin-top:8px">Removes your login, name and phone number. School records such as attendance and fees stay with the school.</p></div>
   ${typeof installCard === "function" ? installCard() : ""}
   <p class="small muted" style="text-align:center;margin-top:16px">Aarambh Pre School · Auspices by R.L.J.D. Group</p></div>`;
 }
@@ -1108,6 +1150,18 @@ function go(v, params = {}) {
 const A = {
   go: d => go(d.v),
   closeSheet: () => closeSheet(),
+  deleteAccount: async () => {
+    if (!confirm("Delete your account? You will be signed out, and your login, name and phone number will be removed. This can't be undone.")) return;
+    try {
+      if (Store.deleteAccount) await Store.deleteAccount();
+      else {
+        if (isAdmin() && approvedStaff().filter(m => m.role === "admin").length <= 1) throw new Error("You are the only admin. Make someone else admin first.");
+        await Store.del("members", S.meId);
+        if (Store.mode === "local") { ls.del("session"); S.meId = null; }
+      }
+      toast("Your account was deleted"); S.view = "home"; render(true);
+    } catch (e) { toast(friendlyError(e)); }
+  },
   menu: () => openMenu(),
   menuClose: () => closeMenu(),
   menuGo: d => go(d.v),
@@ -1221,7 +1275,7 @@ const A = {
   addStu: () => studentForm(null),
   editStu: d => studentForm(Store.get("students", d.id)),
   delStu: async d => { if (confirm("Remove this student? Their attendance history stays in old records.")) try { await Store.del("students", d.id); toast("Student removed"); go("students"); } catch (e) { toast(friendlyError(e)); } },
-  addFee: d => openSheet("Add fee record", field("For", inp("label", "", "text", 'required placeholder="e.g. October tuition"')) + field("Amount (₹)", inp("amount", "", "number", 'required min="0" inputmode="numeric"')) + field("Date", inp("date", today(), "date")) + field("Status", `<select name="status"><option value="due">Due</option><option value="paid">Paid</option></select>`),
+  addFee: d => openSheet("Add fee record", field("For", inp("label", "", "text", 'required placeholder="e.g. October tuition"')) + field("Amount (" + CFG.currency + ")", inp("amount", "", "number", 'required min="0" inputmode="numeric"')) + field("Date", inp("date", today(), "date")) + field("Status", `<select name="status"><option value="due">Due</option><option value="paid">Paid</option></select>`),
     async fd => { const s = Store.raw("students", d.id); const fees = [...(s.fees || []), { id: newId(), label: fd.get("label").trim(), amount: Number(fd.get("amount")), date: fd.get("date"), status: fd.get("status") }]; await Store.patch("students", d.id, { fees }); toast("Fee added"); }, "Add fee"),
   toggleFee: async d => { const s = Store.raw("students", d.id); const fees = (s.fees || []).map(f => f.id === d.f ? { ...f, status: f.status === "paid" ? "due" : "paid" } : f); try { await Store.patch("students", d.id, { fees }); } catch (e) { toast(friendlyError(e)); } },
   addMedia: () => openSheet("Upload to gallery", field("Photo or video", `<input type="file" name="file" accept="image/*,video/*" required>`) + field("Caption", inp("caption", "", "text", 'placeholder="e.g. Diwali celebration, UKG"')) + `<label class="check"><input type="checkbox" name="parents" checked> Parents can see this</label><p class="small muted">Untick to keep it for staff only.</p>`,
@@ -1289,13 +1343,14 @@ async function setDp(file, target) {
 const F = {
   signup: async fd => {
     const cloud = Store.mode === "cloud";
-    const phone = fd.get("phone").trim(), name = fd.get("name").trim();
+    const phone = e164(fd.get("cc"), fd.get("phone")), name = fd.get("name").trim();
     let r = fd.get("role");
     const firstUser = members().length === 0;
     if (cloud && S.isOwner) r = "admin";
     if (!cloud && !firstUser && r === "admin") r = "parent";
     if (cloud && !S.isOwner && r === "admin") r = "parent";
     const doc = { name, phone, role: r, status: r === "admin" ? "approved" : "pending", studentIds: [], createdAt: Date.now() };
+    if (fd.get("consent")) doc.consentAt = Date.now();
     if (r === "parent") { doc.childName = (fd.get("childName") || "").trim(); doc.childCls = fd.get("childCls"); }
     if (!cloud) {
       if (members().some(m => m.phone === phone)) throw new Error("An account with this mobile number already exists. Log in instead.");
@@ -1307,7 +1362,7 @@ const F = {
     render(true);
   },
   login: async fd => {
-    const phone = fd.get("phone").trim(), h = await hash(fd.get("pass"));
+    const phone = e164(fd.get("cc"), fd.get("phone")), h = await hash(fd.get("pass"));
     const m = members().find(x => x.phone === phone && x.passHash === h);
     if (!m) throw new Error("Mobile number or password is wrong.");
     S.meId = m.id; ls.set("session", m.id); S.view = "home"; render(true);

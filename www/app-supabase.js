@@ -16,7 +16,7 @@
   const COLL = Object.fromEntries(COLLS.map(c => [tbl(c), c]));
   const EMAIL_DOMAIN = "@phone.aarambh-app.in";   // the mobile number is the login ID
   const PIXEL = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
-  const phoneToEmail = ph => { const d = String(ph || "").replace(/\D/g, "").slice(-10); if (d.length !== 10) throw new Error("Enter a 10-digit mobile number."); return d + EMAIL_DOMAIN; };
+  const phoneToEmail = e => String(e).replace(/\D/g, "") + EMAIL_DOMAIN;   // +919876543210 → 919876543210@…
   const clean = o => JSON.parse(JSON.stringify(o));
   const fail = e => { throw Object.assign(new Error(e.message || "Request failed"), { code: e.code === "42501" ? "permission-denied" : e.code }); };
   const isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
@@ -161,13 +161,14 @@
     return (e && e.message) || "Something went wrong. Try again.";
   };
   F.signup = async fd => {
-    const name = fd.get("name").trim(), phone = fd.get("phone").trim();
+    const name = fd.get("name").trim(), phone = e164(fd.get("cc"), fd.get("phone"));
     const { data, error } = await sb.auth.signUp({ email: phoneToEmail(phone), password: fd.get("pass") });
     if (error) throw new Error(authMsg(error));
     if (!data.session) throw new Error("Sign-up needs “Confirm email” turned off in Supabase (README step 3).");
     const uid = data.user.id;
     const role = fd.get("role") === "staff" ? "staff" : "parent";
     const doc = { name, phone, role, status: "pending", studentIds: [], createdAt: Date.now() };
+    if (fd.get("consent")) doc.consentAt = Date.now();
     if (role === "parent") { doc.childName = (fd.get("childName") || "").trim(); doc.childCls = fd.get("childCls"); }
     const { error: e2 } = await sb.from("members").insert({ id: uid, data: doc });
     if (e2) fail(e2);
@@ -175,10 +176,15 @@
     queueRefetch("members"); render(true);
   };
   F.login = async fd => {
-    const { error } = await sb.auth.signInWithPassword({ email: phoneToEmail(fd.get("phone")), password: fd.get("pass") });
+    const { error } = await sb.auth.signInWithPassword({ email: phoneToEmail(e164(fd.get("cc"), fd.get("phone"))), password: fd.get("pass") });
     if (error) throw new Error(authMsg(error));
   };
   A.logout = async () => { closeMenu(); await sb.auth.signOut(); };
+  Store.deleteAccount = async () => {
+    const { error } = await sb.rpc("delete_my_account");
+    if (error) throw new Error(error.message);
+    await sb.auth.signOut().catch(() => {});
+  };
 
   /* ---------- install to home screen ---------- */
   let installPrompt = null;

@@ -16,6 +16,7 @@ Parents, teachers and the admin use one app:
   - Admin approvals
 - **Camera:** in-app photo and video recording, up to 1 minute with sound.
 - **Classes:** Nursery, Play, LKG, UKG.
+- **Works worldwide:** Android and iPhone, international mobile numbers, the school's own timezone and currency, in-app account deletion, and a privacy policy with parental consent.
 
 ## Technology (all open source)
 
@@ -82,12 +83,21 @@ Partial updates go through `public.patch_doc()`, which does an atomic JSONB deep
 
 Open **Project Settings → API**. Put the **Project URL** and the **anon public key** in `www/supabase-config.js`. The anon key is meant to be public, because the RLS policies protect the data.
 
+In the same file, check `AARAMBH_CONFIG`:
+
+| Setting | Default | What it controls |
+|---|---|---|
+| `timeZone` | `Asia/Kolkata` | The school's clock. "Today" for attendance, menus and plans uses it on every phone, including a parent's phone abroad. |
+| `currency` / `locale` | `INR` / `en-IN` | How fees are shown, e.g. `AED` / `en-AE`, `GBP` / `en-GB`. |
+| `countryCode` | `+91` | Country code pre-selected at sign-up and log-in. People can pick any other. |
+| `privacyUrl` | `privacy.html` | Consent checkbox at sign-up and the Privacy link in **Me**. |
+
 ### 3. Sign-in settings
 
 Open **Authentication → Providers → Email**:
 
 - Keep Email **enabled**.
-- Turn **Confirm email OFF.** People sign in with a mobile number and password. The app turns the number into an internal ID (`9876543210@phone.aarambh-app.in`), so no email or SMS is sent.
+- Turn **Confirm email OFF.** People sign in with a mobile number (any country) and password. The app turns the full international number into an internal ID, e.g. +91 98765 43210 → `919876543210@phone.aarambh-app.in`, so no email or SMS is sent and SMS costs nothing in any country.
 
 ### 4. Create the database
 
@@ -110,7 +120,7 @@ supabase db push
 ```sql
 update public.members
 set data = data || '{"role":"admin","status":"approved"}'::jsonb
-where id = (select id from auth.users where email = '9876543210@phone.aarambh-app.in');
+where id = (select id from auth.users where email = '919876543210@phone.aarambh-app.in');   -- country code + number
 ```
 
 After this, approve teachers and parents from the app's **Admin** screen, where you also link each parent to their child.
@@ -173,12 +183,38 @@ npm run ios            # opens Xcode
 
 **Push in store apps:** Web Push does not run inside store apps. Alerts there need Firebase Cloud Messaging on Android and APNs on iPhone. These are delivery services only; the database stays on PostgreSQL. Step 7 (install from the browser) gives alerts without them.
 
+## Worldwide use (Android and iPhone)
+
+**Supported phones:** Android 7+ with Chrome, and iPhone/iPad on iOS 15 or later. Older iOS versions get simpler layouts but still work. Phone alerts need Android Chrome, or iOS 16.4+ with the app added to the Home Screen.
+
+**Speed abroad:**
+- The app files are served from GitHub Pages' worldwide CDN.
+- Data and photos come from one Supabase region. Pick the region closest to most families; Mumbai suits a school in India.
+- Parents abroad still get a normal experience, because photos are compressed and videos are capped at 1 minute.
+
+**Store listing worldwide:**
+- In the Google Play Console and App Store Connect, set availability to all countries.
+- Both stores require:
+  - a public **privacy policy URL**, e.g. `https://adityavermanov15.github.io/aarambh-preschool/privacy.html`. First fill in the [bracketed] items in `www/privacy.html`.
+  - **in-app account deletion**, which is under Me → Delete my account.
+  - Google's **Data safety** form and Apple's **App Privacy** labels. Declare names, phone numbers, photos/videos, and children's records collected for app functionality, not shared, and not used for tracking.
+- Choose age rating "Everyone" / "4+".
+- Do **not** list the app in the Kids / "Designed for Families" category. The app is used by parents and staff, and that category adds extra rules.
+
+**Children's data laws:**
+- India's DPDP Act 2023, the EU/UK GDPR, and the US COPPA all require parental consent for children's data. The app records it: a parent must tick the consent box at sign-up, and the time is saved as `consentAt` on their account.
+- The app supports erasure requests: people can delete their account in the app. The admin can remove a child's record from **Students**.
+
+**China:**
+- Google Play and Chrome's push service don't work in mainland China, so alerts there won't arrive.
+- Everything else works in a browser if Supabase and GitHub Pages are reachable from the family's network.
+
 ## Everyday admin tasks
 
 **Reset a parent's password** in the SQL Editor:
 ```sql
 update auth.users set encrypted_password = crypt('NewPass123', gen_salt('bf'))
-where email = '9876543210@phone.aarambh-app.in';
+where email = '919876543210@phone.aarambh-app.in';
 ```
 
 **Back up the database:**
@@ -196,4 +232,5 @@ select data->>'name', data->>'phone', role from public.members where status = 'p
 
 - Parents can read their child's class attendance rows. Each row also holds classmates' present/absent marks. The app shows only their own child's marks.
 - The app loads the last 120 days of attendance for staff screens. Older rows stay in the database.
+- Screens are in English. The text is in `www/index.html`, and Hindi or another language can be added later.
 - If a child moves to a different class, open that parent in **Admin** and press **Save** so their class access updates.

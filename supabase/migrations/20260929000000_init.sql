@@ -403,3 +403,25 @@ create policy media_upload on storage.objects for insert to authenticated
               and (storage.foldername(name))[1] = (select auth.uid())::text);
 create policy media_delete on storage.objects for delete to authenticated
   using (bucket_id = 'media' and ((storage.foldername(name))[1] = (select auth.uid())::text or (select private.is_staff())));
+
+-- ---------------------------------------------------------------------
+-- In-app account deletion (required by Google Play and the App Store;
+-- supports GDPR / India DPDP erasure requests). Removes the person's login,
+-- profile and devices. School records (students, attendance, fees, posts)
+-- stay with the school.
+-- ---------------------------------------------------------------------
+create or replace function public.delete_my_account() returns void
+language plpgsql security definer set search_path = '' as $$
+declare v_uid uuid := auth.uid();
+begin
+  if v_uid is null then raise exception 'Not signed in' using errcode = '42501'; end if;
+  if private.is_admin()
+     and (select count(*) from public.members m where m.role = 'admin' and m.status = 'approved') <= 1 then
+    raise exception 'You are the only admin. Make someone else admin before deleting your account.' using errcode = '42501';
+  end if;
+  delete from public.push_subscriptions ps where ps.uid = v_uid;
+  delete from public.members m where m.id = v_uid;
+  delete from auth.users u where u.id = v_uid;
+end $$;
+revoke execute on function public.delete_my_account() from public, anon;
+grant  execute on function public.delete_my_account() to authenticated;
