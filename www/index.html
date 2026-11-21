@@ -374,6 +374,52 @@ button,.media,.tile,.chip,a{touch-action:manipulation;-webkit-tap-highlight-colo
 table.fees{width:100%;border-collapse:collapse;font-size:.92rem}
 table.fees td,table.fees th{padding:8px 6px;border-top:1px solid var(--line);text-align:left}
 table.fees th{color:var(--muted);font-weight:600;border-top:0}
+
+/* QR attendance: Home card, scanner, printing */
+.daycard .btn{flex:1 1 0;min-width:0;padding:0 10px;white-space:normal;line-height:1.15;text-align:center}
+.scantitle{font-size:1rem}
+.scanframe{position:absolute;left:50%;top:50%;width:min(66vw,290px);aspect-ratio:1;transform:translate(-50%,-50%);border:3px solid #fff;border-radius:22px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45)}
+.scanbar{padding:14px 16px calc(22px + env(safe-area-inset-bottom,0px));text-align:center;min-height:150px}
+.scanbar h3{font-size:1.1rem;color:#fff}
+.scanbar,.scanbar p{color:#fff}
+.scanbar .btn.ghost{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.3)}
+.scanres .big{width:56px;height:56px;border-radius:50%;margin:0 auto 8px;display:grid;place-items:center;font-size:1.8rem;font-weight:800;background:#3F8F2F}
+.scanres.bad .big{background:#C0392B}
+.scanres.bad p,.scanres.warn p{color:#FFD9A8}
+.scanres .av{border:2px solid #fff}
+.spin{width:36px;height:36px;margin:0 auto 10px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:#fff;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.scanmodes{display:flex;gap:4px;margin:0 auto 8px;background:rgba(255,255,255,.14);border-radius:999px;padding:4px;width:max-content}
+.scanmodes button{border:0;background:none;color:#fff;padding:7px 22px;border-radius:999px;font-weight:700;cursor:pointer}
+.scanmodes button.on{background:#fff;color:#000}
+.pickgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.qrprev{max-width:220px;margin:0 auto}
+.qrprev svg{width:100%;height:auto;display:block;border-radius:8px}
+#printArea{display:none}
+@media print{
+  @page{size:A4;margin:10mm}
+  html,body{background:#fff!important}
+  body>*{display:none!important}
+  #printArea{display:block!important;color:#000;background:#fff}
+  #printArea *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .poster{text-align:center;font-family:system-ui,sans-serif;padding-top:6mm}
+  .poster .plogo{width:28mm;height:28mm;border-radius:50%}
+  .poster h1{font-size:26pt;margin:4mm 0 0}.poster h2{font-size:18pt;margin:2mm 0 6mm;color:#B9612B}
+  .poster .pqr{width:125mm;margin:0 auto}.poster .pqr svg{width:100%;height:auto}
+  .poster .pbig{font-size:17pt;margin:6mm 0 2mm}.poster .psmall{font-size:9pt;color:#555;margin-top:10mm}
+  .idsheet{display:grid;grid-template-columns:85.6mm 85.6mm;gap:4mm;justify-content:center}
+  .idcard{width:85.6mm;height:54mm;box-sizing:border-box;border:.3mm dashed #999;border-radius:3mm;overflow:hidden;break-inside:avoid;font-family:system-ui,sans-serif;display:flex;flex-direction:column}
+  .idtop{display:flex;align-items:center;gap:2mm;background:#F08A24;color:#fff;padding:1.5mm 3mm}
+  .idtop img{width:8mm;height:8mm;border-radius:50%;background:#fff}
+  .idtop b{font-size:10pt;letter-spacing:.5pt;display:block;line-height:1}.idtop small{font-size:7pt}
+  .idbody{flex:1;display:flex;gap:2.5mm;padding:2.5mm 3mm;align-items:center}
+  .idphoto{width:20mm;height:25mm;border-radius:2mm;overflow:hidden;background:#EAF0FB;display:grid;place-items:center;flex:none}
+  .idphoto img{width:100%;height:100%;object-fit:cover}.idphoto span{font-size:14pt;font-weight:700;color:#1B2340}
+  .idinfo{flex:1;display:flex;flex-direction:column;gap:.8mm;font-size:7.5pt;min-width:0}
+  .idinfo b{font-size:10pt;line-height:1.15}
+  .idqr{width:27mm;text-align:center;flex:none}.idqr svg{width:27mm;height:27mm;display:block}
+  .idqr small{font-size:5.5pt;font-family:ui-monospace,monospace;letter-spacing:.2pt}
+}
 </style>
 </head>
 <body>
@@ -684,7 +730,7 @@ async function startStream() {
 }
 function stopStream() { if (Cam.stream) { Cam.stream.getTracks().forEach(t => t.stop()); Cam.stream = null; } }
 function stopRec(discard) { clearInterval(Cam.timer); if (Cam.rec && Cam.rec.state !== "inactive") { if (discard) Cam.rec.onstop = null; Cam.rec.stop(); } }
-function closeCam() { stopRec(true); stopStream(); const c = $("#cam"); c.hidden = true; c.innerHTML = ""; document.body.style.overflow = ""; }
+function closeCam() { if (typeof Scan !== "undefined") Scan.on = false; stopRec(true); stopStream(); const c = $("#cam"); c.hidden = true; c.innerHTML = ""; document.body.style.overflow = ""; }
 function camFailed(e) {
   closeCam();
   const denied = e && (e.name === "NotAllowedError" || e.name === "SecurityError");
@@ -867,7 +913,8 @@ function todayStrip() {
   if (m.role === "parent") {
     const kids = myKids(); if (!kids.length) return "";
     return `<div class="today">${kids.map(k => { const d = Store.raw("attStudents", t + "_" + k.cls); const mk = d && d.marks ? d.marks[k.id] : null;
-      return `<button data-act="child" data-id="${k.id}">${avatar(k.name, k.photo)}<div><div style="font-weight:600">${esc(k.name.split(" ")[0])}</div><span class="tag ${mk === "P" ? "ok" : mk === "A" ? "bad" : mk === "L" ? "warn" : ""}">${mk === "P" ? "Present today" : mk === "A" ? "Absent today" : mk === "L" ? "On leave" : "Not marked yet"}</span></div></button>`; }).join("")}</div>`;
+      const tm = d && d.times && typeof attKidTimes === "function" ? attKidTimes(d.times[k.id]) : "";
+      return `<button data-act="child" data-id="${k.id}">${avatar(k.name, k.photo)}<div><div style="font-weight:600">${esc(k.name.split(" ")[0])}</div><span class="tag ${mk === "P" ? "ok" : mk === "A" ? "bad" : mk === "L" ? "warn" : ""}">${mk === "P" ? (tm ? esc(tm) : "Present today") : mk === "A" ? "Absent today" : mk === "L" ? "On leave" : "Not marked yet"}</span></div></button>`; }).join("")}</div>`;
   }
   const total = students().length; let present = 0;
   CLASSES.forEach(c => { const d = Store.raw("attStudents", t + "_" + c.id); if (d && d.marks) Object.values(d.marks).forEach(v => { if (v === "P") present++; }); });
@@ -885,7 +932,7 @@ function postCard(x) {
 function viewHome() {
   const items = feedItems();
   const pin = visibleNotices().find(n => n.pinned);
-  return storiesBar() + todayStrip() +
+  return storiesBar() + (typeof attCard === "function" ? attCard() : "") + todayStrip() +
     (pin ? `<div class="section" style="margin-top:10px"><div class="card notice pin" data-act="go" data-v="notices" style="cursor:pointer;padding:10px 14px"><b>📌 ${esc(pin.title)}</b></div></div>` : "") +
     (items.length ? `<div class="feed">${items.slice(0, S.feedLimit).map(postCard).join("")}</div>${items.length > S.feedLimit ? `<div class="empty"><button class="btn ghost" data-act="more">Show more</button></div>` : ""}`
       : `<div class="section">${empty(isStaff() ? "Share the first photo or video from school today." : "Photos and videos from school will appear here.", isStaff() ? `<button class="btn sun" data-act="create">Create a post</button>` : "")}</div>`);
@@ -908,11 +955,12 @@ function viewStudentAtt() {
   if (!S.attDraft || S.attDraft.key !== key || (!S.attDraft.dirty && doc !== S.attDraft.src)) S.attDraft = { key, src: doc, dirty: false, marks: { ...((doc && doc.marks) || {}) } };
   const mk = S.attDraft.marks, list = studentsIn(S.attCls);
   const c = { P: 0, A: 0, L: 0 }; list.forEach(s => { if (mk[s.id]) c[mk[s.id]]++; });
-  return pageHead("Student attendance") +
+  const times = (doc && doc.times) || {};
+  return pageHead("Student attendance", Store.attendance ? `<button class="btn sm sun" data-act="scanCards">🪪 Scan</button>` : "") +
   `<div class="toolbar"><input type="date" value="${S.attDate}" max="${today()}" data-change="attDate" aria-label="Date"></div>
    <div style="padding:0 16px">${clsChips(S.attCls, "attCls")}</div>
    <div class="section" style="margin-top:6px">${list.length ? `<p class="small muted" style="margin-bottom:8px">${c.P} present · ${c.A} absent · ${c.L} leave · ${list.length - c.P - c.A - c.L} not marked</p>
-   <ul class="list">${list.map(s => `<li>${avatar(s.name, s.photo)}<span class="grow nm">${esc(s.name)}</span><span class="seg" role="group" aria-label="${esc(s.name)}">${["P", "A", "L"].map(k => `<button class="${mk[s.id] === k ? "on " + k : ""}" aria-pressed="${mk[s.id] === k}" data-act="markStu" data-id="${s.id}" data-k="${k}" title="${k === "P" ? "Present" : k === "A" ? "Absent" : "Leave"}">${k}</button>`).join("")}</span></li>`).join("")}</ul>`
+   <ul class="list">${list.map(s => `<li>${avatar(s.name, s.photo)}<span class="grow nm">${esc(s.name)}${times[s.id] && typeof attKidTimes === "function" ? `<small>${esc(attKidTimes(times[s.id]))}</small>` : ""}</span><span class="seg" role="group" aria-label="${esc(s.name)}">${["P", "A", "L"].map(k => `<button class="${mk[s.id] === k ? "on " + k : ""}" aria-pressed="${mk[s.id] === k}" data-act="markStu" data-id="${s.id}" data-k="${k}" title="${k === "P" ? "Present" : k === "A" ? "Absent" : "Leave"}">${k}</button>`).join("")}</span></li>`).join("")}</ul>`
    : empty(`No students in ${clsName(S.attCls)} yet.`, `<button class="btn" data-act="go" data-v="students">Add students</button>`)}</div>
    ${list.length ? `<div class="savebar"><button class="btn ghost sm" data-act="allPresent">All present</button><span class="grow small muted">${S.attDraft.dirty ? "Unsaved changes" : doc ? "Saved" : ""}</span><button class="btn" data-act="saveAtt" ${S.attDraft.dirty ? "" : "disabled"}>Save</button></div>` : ""}`;
 }
@@ -922,8 +970,8 @@ function viewStaffAtt() {
   if (!isAdmin()) {
     const mine = Store.all("attStaff").filter(x => x.marks && x.marks[S.meId]).sort((a, b) => b.date.localeCompare(a.date));
     const todayMark = (Store.raw("attStaff", t) || { marks: {} }).marks?.[S.meId];
-    return pageHead("My attendance") + `<div class="section"><div class="card row"><div class="grow"><b>${fmtDay(t)}</b><div class="small muted">${todayMark ? "Marked " + (todayMark.k === "P" ? "present" : todayMark.k === "A" ? "absent" : "on leave") + (todayMark.at ? " at " + fmtTime(todayMark.at).split(", ")[1] : "") : "Not checked in yet"}</div></div>${todayMark ? `<span class="tag ok">Done</span>` : `<button class="btn sun" data-act="checkIn">Check in</button>`}</div></div>
-    <div class="section"><h2>History</h2>${mine.length ? `<ul class="list">${mine.slice(0, 60).map(x => { const v = x.marks[S.meId]; const k = v.k || v; return `<li><span class="grow">${fmtDay(x.date)}</span><span class="tag ${k === "P" ? "ok" : k === "A" ? "bad" : "warn"}">${k === "P" ? "Present" : k === "A" ? "Absent" : "Leave"}</span></li>`; }).join("")}</ul>` : empty("No attendance recorded yet.")}</div>`;
+    return pageHead("My attendance") + `<div class="section"><div class="card row"><div class="grow"><b>${fmtDay(t)}</b><div class="small muted">${todayMark ? "Marked " + (todayMark.k === "P" ? "present" : todayMark.k === "A" ? "absent" : "on leave") + (todayMark.at ? " · in " + fmtTime(todayMark.at).split(", ")[1] : "") + (todayMark.out ? " · out " + fmtTime(todayMark.out).split(", ")[1] : "") : "Not checked in yet"}</div></div>${todayMark && todayMark.out ? `<span class="tag ok">Done</span>` : `<button class="btn sun" data-act="scanStaff">📷 ${todayMark ? "Check out" : "Check in"}</button>`}</div></div>
+    <div class="section"><h2>History</h2>${mine.length ? `<ul class="list">${mine.slice(0, 60).map(x => { const v = x.marks[S.meId]; const k = v.k || v; return `<li><span class="grow nm">${fmtDay(x.date)}${typeof attStaffTimes === "function" && attStaffTimes(v) ? `<small>${esc(attStaffTimes(v))}${v.late ? " · late" : ""}</small>` : ""}</span><span class="tag ${k === "P" ? "ok" : k === "A" ? "bad" : "warn"}">${k === "P" ? "Present" : k === "A" ? "Absent" : "Leave"}</span></li>`; }).join("")}</ul>` : empty("No attendance recorded yet.")}</div>`;
   }
   if (!S.staffDraft || S.staffDraft.key !== S.staffDate || (!S.staffDraft.dirty && d !== S.staffDraft.src)) {
     const marks = {}; Object.entries((d && d.marks) || {}).forEach(([k, v]) => marks[k] = v.k ? v : { k: v });
@@ -931,7 +979,7 @@ function viewStaffAtt() {
   }
   const mk = S.staffDraft.marks, list = approvedStaff();
   return pageHead("Staff attendance") + `<div class="toolbar"><input type="date" value="${S.staffDate}" max="${t}" data-change="staffDate" aria-label="Date"></div>
-  <div class="section" style="margin-top:6px">${list.length ? `<ul class="list">${list.map(s => { const k = mk[s.id] && mk[s.id].k; return `<li>${avatar(s.name)}<span class="grow nm">${esc(s.name)}<small>${ROLE_LABEL[s.role]}${mk[s.id] && mk[s.id].at ? " · checked in " + fmtTime(mk[s.id].at).split(", ")[1] : ""}</small></span><span class="seg" role="group">${["P", "A", "L"].map(x => `<button class="${k === x ? "on " + x : ""}" aria-pressed="${k === x}" data-act="markStaff" data-id="${s.id}" data-k="${x}">${x}</button>`).join("")}</span></li>`; }).join("")}</ul>` : empty("No staff accounts yet. Staff sign up from the login screen and you approve them in Admin.")}</div>
+  <div class="section" style="margin-top:6px">${list.length ? `<ul class="list">${list.map(s => { const k = mk[s.id] && mk[s.id].k; return `<li>${avatar(s.name)}<span class="grow nm">${esc(s.name)}<small>${ROLE_LABEL[s.role]}${mk[s.id] && mk[s.id].at ? " · in " + fmtTime(mk[s.id].at).split(", ")[1] : ""}${mk[s.id] && mk[s.id].out ? " · out " + fmtTime(mk[s.id].out).split(", ")[1] : ""}${mk[s.id] && mk[s.id].late ? " · late" : ""}${mk[s.id] && (mk[s.id].flags || []).includes("new_device") ? " · new phone" : ""}</small></span><span class="seg" role="group">${["P", "A", "L"].map(x => `<button class="${k === x ? "on " + x : ""}" aria-pressed="${k === x}" data-act="markStaff" data-id="${s.id}" data-k="${x}">${x}</button>`).join("")}</span></li>`; }).join("")}</ul>` : empty("No staff accounts yet. Staff sign up from the login screen and you approve them in Admin.")}</div>
   ${list.length ? `<div class="savebar"><span class="grow small muted">${S.staffDraft.dirty ? "Unsaved changes" : d ? "Saved" : ""}</span><button class="btn" data-act="saveStaff" ${S.staffDraft.dirty ? "" : "disabled"}>Save</button></div>` : ""}`;
 }
 
@@ -973,7 +1021,7 @@ function studentsListHtml() {
   return list.length ? `<ul class="list">${list.map(s => `<li class="tap" data-act="stu" data-id="${s.id}">${avatar(s.name, s.photo)}<span class="grow nm">${esc(s.name)}<small>${clsName(s.cls)}${s.fatherName || s.motherName || s.parentName ? " · " + esc(s.fatherName || s.motherName || s.parentName) : ""}</small></span><span class="muted">›</span></li>`).join("")}</ul>` : empty(students().length ? "No students match." : "No students added yet.", isAdmin() && !students().length ? `<button class="btn" data-act="addStu">Add a student</button>` : "");
 }
 function viewStudents() {
-  return pageHead("Students", isAdmin() ? `<button class="btn sm sun" data-act="addStu">+ Add</button>` : "") +
+  return pageHead("Students", isAdmin() ? `${Store.attendance ? `<button class="btn sm ghost" data-act="idCards">🪪 ID cards</button>` : ""}<button class="btn sm sun" data-act="addStu">+ Add</button>` : "") +
   `<div class="toolbar"><input type="search" placeholder="Search by child, parent, phone or adm. no." value="${esc(S.stuQ)}" data-input="stuQ" aria-label="Search students"></div>
   <div style="padding:0 16px">${clsChips(S.stuCls, "stuCls", true)}</div>
   <div class="section" style="margin-top:6px"><p class="small muted" style="margin-bottom:8px">${CLASSES.map(c => c.name + ": " + studentsIn(c.id).length).join(" · ")}</p><div id="stuList">${studentsListHtml()}</div></div>`;
@@ -1032,7 +1080,7 @@ function viewStudent() {
   const s = Store.get("students", S.params.id);
   if (!s) return pageHead("Student") + empty("This student was removed.", `<button class="btn" data-act="go" data-v="students">Back to students</button>`);
   return `<div class="phead"><button class="back" data-act="go" data-v="students" aria-label="Back to students">‹</button><h1>Student account</h1></div>` + studentProfileHtml(s, false) +
-  (isAdmin() ? `<div class="section"><button class="btn danger block" data-act="delStu" data-id="${s.id}">Remove student</button></div>` : "");
+  (isAdmin() ? `<div class="section">${Store.attendance ? `<button class="btn ghost block" style="margin-bottom:10px" data-act="replaceCard" data-id="${s.id}">🪪 New ID card (lost or damaged)</button>` : ""}<button class="btn danger block" data-act="delStu" data-id="${s.id}">Remove student</button></div>` : "");
 }
 function viewAccount() {
   const kids = myKids();
@@ -1228,7 +1276,7 @@ const A = {
   markStu: d => { const m = S.attDraft.marks; m[d.id] = m[d.id] === d.k ? undefined : d.k; if (!m[d.id]) delete m[d.id]; S.attDraft.dirty = true; render(true); },
   allPresent: () => { studentsIn(S.attCls).forEach(s => S.attDraft.marks[s.id] = "P"); S.attDraft.dirty = true; render(true); },
   saveAtt: async () => {
-    try { await Store.set("attStudents", S.attDraft.key, { date: S.attDate, cls: S.attCls, marks: S.attDraft.marks, by: S.meId, at: Date.now() }); S.attDraft.dirty = false; S.attDraft.src = Store.raw("attStudents", S.attDraft.key); toast("Attendance saved for " + clsName(S.attCls)); render(true); }
+    try { await Store.set("attStudents", S.attDraft.key, { ...(Store.raw("attStudents", S.attDraft.key) || {}), date: S.attDate, cls: S.attCls, marks: S.attDraft.marks, by: S.meId, at: Date.now() }); S.attDraft.dirty = false; S.attDraft.src = Store.raw("attStudents", S.attDraft.key); toast("Attendance saved for " + clsName(S.attCls)); render(true); }
     catch (e) { toast(friendlyError(e)); }
   },
   markStaff: d => { const m = S.staffDraft.marks; if (m[d.id] && m[d.id].k === d.k) delete m[d.id]; else m[d.id] = { ...(m[d.id] || {}), k: d.k }; S.staffDraft.dirty = true; render(true); },
@@ -1428,6 +1476,7 @@ document.addEventListener("input", e => {
   setTimeout(() => { if (me()) cleanupStories(); }, 8000);
 })();
 </script>
+<script src="attendance.js"></script>
 <script src="app-supabase.js"></script>
 </body>
 </html>

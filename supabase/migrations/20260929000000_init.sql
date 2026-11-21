@@ -248,11 +248,11 @@ drop policy if exists students_write  on public.students;
 drop policy if exists students_update on public.students;
 drop policy if exists students_delete on public.students;
 create policy students_read on public.students for select to authenticated
-  using ((select private.is_staff()) or ((select private.is_parent()) and id = any((select private.my_kids()))));
+  using ((select private.is_staff()) or ((select private.is_parent()) and id = any(private.my_kids())));
 create policy students_write on public.students for insert to authenticated
   with check ((select private.is_admin()));
 create policy students_update on public.students for update to authenticated
-  using ((select private.is_staff()) or ((select private.is_parent()) and id = any((select private.my_kids()))));
+  using ((select private.is_staff()) or ((select private.is_parent()) and id = any(private.my_kids())));
 create policy students_delete on public.students for delete to authenticated
   using ((select private.is_admin()));
 
@@ -260,7 +260,7 @@ create policy students_delete on public.students for delete to authenticated
 drop policy if exists att_students_read  on public.att_students;
 drop policy if exists att_students_write on public.att_students;
 create policy att_students_read on public.att_students for select to authenticated
-  using ((select private.is_staff()) or ((select private.is_parent()) and cls = any((select private.my_classes()))));
+  using ((select private.is_staff()) or ((select private.is_parent()) and cls = any(private.my_classes())));
 create policy att_students_write on public.att_students for all to authenticated
   using ((select private.is_staff())) with check ((select private.is_staff()));
 
@@ -324,12 +324,12 @@ drop policy if exists gallery_update on public.gallery;
 drop policy if exists gallery_delete on public.gallery;
 create policy gallery_read on public.gallery for select to authenticated
   using ((select private.is_staff())
-      or ((select private.is_parent()) and parents and (cls = 'all' or cls = any((select private.my_classes())))));
+      or ((select private.is_parent()) and parents and (cls = 'all' or cls = any(private.my_classes()))));
 create policy gallery_insert on public.gallery for insert to authenticated
   with check ((select private.is_staff()) and created_by = (select auth.uid())::text);
 create policy gallery_update on public.gallery for update to authenticated   -- parents: likes only (see trigger)
   using ((select private.is_staff())
-      or ((select private.is_parent()) and parents and (cls = 'all' or cls = any((select private.my_classes())))));
+      or ((select private.is_parent()) and parents and (cls = 'all' or cls = any(private.my_classes()))));
 create policy gallery_delete on public.gallery for delete to authenticated
   using ((select private.is_staff()));
 
@@ -337,7 +337,7 @@ drop policy if exists stories_read  on public.stories;
 drop policy if exists stories_write on public.stories;
 create policy stories_read on public.stories for select to authenticated
   using ((select private.is_staff())
-      or ((select private.is_parent()) and parents and (cls = 'all' or cls = any((select private.my_classes())))));
+      or ((select private.is_parent()) and parents and (cls = 'all' or cls = any(private.my_classes()))));
 create policy stories_write on public.stories for all to authenticated
   using ((select private.is_staff())) with check ((select private.is_staff()));
 
