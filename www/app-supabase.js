@@ -186,6 +186,51 @@
     await sb.auth.signOut().catch(() => {});
   };
 
+  /* ---------- QR attendance (server functions in 20261121000000_qr_attendance.sql) ---------- */
+  const offline = () => Object.assign(new Error("No internet connection. Try again."), { code: "offline" });
+  const rpc = async (fn, args) => {
+    let res;
+    try { res = await sb.rpc(fn, args); } catch { throw offline(); }
+    const { data, error } = res;
+    if (error) {
+      if (/fetch|network|load failed/i.test(error.message || "")) throw offline();
+      if (/could not find the function|does not exist/i.test(error.message || "")) throw new Error("QR attendance isn't set up yet. Run the QR attendance script in Supabase (docs/qr-attendance-setup.md).");
+      throw Object.assign(new Error(error.message || "Request failed"), { code: error.code });
+    }
+    return data;
+  };
+  Store.attendance = {
+    siteInfo: () => rpc("att_site_info"),
+    scanStaff: (code, lat, lng, accuracy, device) => rpc("scan_staff", { p_code: code, p_lat: lat, p_lng: lng, p_accuracy: accuracy, p_device: device }),
+    scanStudent: (token, mode, by, at) => rpc("scan_student", { p_token: token, p_mode: mode, p_picked_up_by: by || null, p_scanned_at: at || null }),
+    correct: (kind, id, date, dir, time, reason) => rpc("admin_correct", { p_kind: kind, p_subject: id, p_date: date, p_direction: dir, p_time: time, p_reason: reason }),
+    regenerate: () => rpc("att_regenerate_code", { p_site: "office" }),
+    cardsForClass: cls => rpc("id_cards_for_class", { p_cls: cls }),
+    replaceCard: sid => rpc("replace_id_card", { p_student: sid }),
+    getSite: async () => { const { data, error } = await sb.from("att_sites").select("*").eq("id", "office").maybeSingle(); if (error) fail(error); return data; },
+    saveSite: async row => { const { error } = await sb.from("att_sites").update(row).eq("id", "office"); if (error) fail(error); },
+    devices: async () => { const { data, error } = await sb.from("staff_devices").select("uid,device_id,first_seen,approved").eq("approved", false).order("first_seen", { ascending: false }); if (error) fail(error); return data; },
+    approveDevice: async (uid, dev) => { const { error } = await sb.from("staff_devices").update({ approved: true }).eq("uid", uid).eq("device_id", dev); if (error) fail(error); },
+    removeDevice: async (uid, dev) => { const { error } = await sb.from("staff_devices").delete().eq("uid", uid).eq("device_id", dev); if (error) fail(error); },
+    signNow: async paths => {   // photo links for printing ID cards
+      const { data } = await sb.storage.from("media").createSignedUrls([...new Set(paths)], 3600);
+      const o = {}; (data || []).forEach(d => { if (d.signedUrl && d.path) o[d.path] = d.signedUrl; }); return o;
+    },
+    events: async (from, to) => {   // admin export: paged, only the columns the sheet needs
+      const out = [], step = 1000;
+      for (let i = 0; i < 50; i++) {
+        const { data, error } = await sb.from("att_events")
+          .select("kind,subject_id,direction,at,att_date,cls,method,picked_up_by,flags,note")
+          .gte("att_date", from).lte("att_date", to).order("id").range(i * step, i * step + step - 1);
+        if (error) fail(error);
+        out.push(...data);
+        if (data.length < step) return out;
+      }
+      throw new Error("Too many records for one sheet. Choose a shorter date range.");
+    },
+    refresh: c => queueRefetch(c)
+  };
+
   /* ---------- install to home screen ---------- */
   let installPrompt = null;
   window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; scheduleRender(); });
