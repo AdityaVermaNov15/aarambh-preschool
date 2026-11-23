@@ -440,7 +440,7 @@ const CLASSES = [{id:"NUR",name:"Nursery"},{id:"PG",name:"Play"},{id:"LKG",name:
 const DAYS = ["Mon","Tue","Wed","Thu","Fri","Sat"];
 const DAYNAMES = {Mon:"Monday",Tue:"Tuesday",Wed:"Wednesday",Thu:"Thursday",Fri:"Friday",Sat:"Saturday"};
 const MEALS = [["breakfast","Breakfast"],["lunch","Lunch"],["snack","Snack"]];
-const COLLS = ["members","students","attStudents","attStaff","meals","plans","datesheet","notices","holidays","tickets","gallery","toppers","stories"];
+const COLLS = ["members","students","attStudents","attStaff","meals","plans","datesheet","notices","holidays","tickets","gallery","toppers","stories","leaves"];
 const ROLE_LABEL = {admin:"Admin",staff:"Teacher / Staff",parent:"Parent"};
 const CFG = Object.assign({ timeZone: "Asia/Kolkata", currency: "INR", locale: "en-IN", countryCode: "+91", privacyUrl: "" }, window.AARAMBH_CONFIG || {});
 const COUNTRY_CODES = [["+91","🇮🇳","India"],["+977","🇳🇵","Nepal"],["+880","🇧🇩","Bangladesh"],["+94","🇱🇰","Sri Lanka"],["+92","🇵🇰","Pakistan"],["+975","🇧🇹","Bhutan"],["+960","🇲🇻","Maldives"],
@@ -626,6 +626,7 @@ function attFor(studentId, cls, month) {
 
 /* ---------- notifications ---------- */
 function onRemoteChange(c, snap) {
+  if (c === "leaves" && typeof leaveRemote === "function") return leaveRemote(snap);
   if (c !== "notices" || !S.meId) return;
   snap.docChanges().forEach(ch => {
     if (ch.type !== "added") return;
@@ -912,7 +913,7 @@ function todayStrip() {
   const t = today(), m = me();
   if (m.role === "parent") {
     const kids = myKids(); if (!kids.length) return "";
-    return `<div class="today">${kids.map(k => { const d = Store.raw("attStudents", t + "_" + k.cls); const mk = d && d.marks ? d.marks[k.id] : null;
+    return `<div class="today">${kids.map(k => { const d = Store.raw("attStudents", t + "_" + k.cls); const mk = (d && d.marks ? d.marks[k.id] : null) || (typeof leaveOn === "function" && leaveOn(k.id, t) ? "L" : null);
       const tm = d && d.times && typeof attKidTimes === "function" ? attKidTimes(d.times[k.id]) : "";
       return `<button data-act="child" data-id="${k.id}">${avatar(k.name, k.photo)}<div><div style="font-weight:600">${esc(k.name.split(" ")[0])}</div><span class="tag ${mk === "P" ? "ok" : mk === "A" ? "bad" : mk === "L" ? "warn" : ""}">${mk === "P" ? (tm ? esc(tm) : "Present today") : mk === "A" ? "Absent today" : mk === "L" ? "On leave" : "Not marked yet"}</span></div></button>`; }).join("")}</div>`;
   }
@@ -932,7 +933,7 @@ function postCard(x) {
 function viewHome() {
   const items = feedItems();
   const pin = visibleNotices().find(n => n.pinned);
-  return storiesBar() + (typeof attCard === "function" ? attCard() : "") + todayStrip() +
+  return storiesBar() + (typeof attCard === "function" ? attCard() : "") + (typeof leaveCard === "function" ? leaveCard() : "") + todayStrip() +
     (pin ? `<div class="section" style="margin-top:10px"><div class="card notice pin" data-act="go" data-v="notices" style="cursor:pointer;padding:10px 14px"><b>📌 ${esc(pin.title)}</b></div></div>` : "") +
     (items.length ? `<div class="feed">${items.slice(0, S.feedLimit).map(postCard).join("")}</div>${items.length > S.feedLimit ? `<div class="empty"><button class="btn ghost" data-act="more">Show more</button></div>` : ""}`
       : `<div class="section">${empty(isStaff() ? "Share the first photo or video from school today." : "Photos and videos from school will appear here.", isStaff() ? `<button class="btn sun" data-act="create">Create a post</button>` : "")}</div>`);
@@ -960,7 +961,7 @@ function viewStudentAtt() {
   `<div class="toolbar"><input type="date" value="${S.attDate}" max="${today()}" data-change="attDate" aria-label="Date"></div>
    <div style="padding:0 16px">${clsChips(S.attCls, "attCls")}</div>
    <div class="section" style="margin-top:6px">${list.length ? `<p class="small muted" style="margin-bottom:8px">${c.P} present · ${c.A} absent · ${c.L} leave · ${list.length - c.P - c.A - c.L} not marked</p>
-   <ul class="list">${list.map(s => `<li>${avatar(s.name, s.photo)}<span class="grow nm">${esc(s.name)}${times[s.id] && typeof attKidTimes === "function" ? `<small>${esc(attKidTimes(times[s.id]))}</small>` : ""}</span><span class="seg" role="group" aria-label="${esc(s.name)}">${["P", "A", "L"].map(k => `<button class="${mk[s.id] === k ? "on " + k : ""}" aria-pressed="${mk[s.id] === k}" data-act="markStu" data-id="${s.id}" data-k="${k}" title="${k === "P" ? "Present" : k === "A" ? "Absent" : "Leave"}">${k}</button>`).join("")}</span></li>`).join("")}</ul>`
+   <ul class="list">${list.map(s => `<li>${avatar(s.name, s.photo)}<span class="grow nm">${esc(s.name)}${typeof leaveTag === "function" ? leaveTag(s.id, S.attDate) : ""}${times[s.id] && typeof attKidTimes === "function" ? `<small>${esc(attKidTimes(times[s.id]))}</small>` : ""}</span><span class="seg" role="group" aria-label="${esc(s.name)}">${["P", "A", "L"].map(k => `<button class="${mk[s.id] === k ? "on " + k : ""}" aria-pressed="${mk[s.id] === k}" data-act="markStu" data-id="${s.id}" data-k="${k}" title="${k === "P" ? "Present" : k === "A" ? "Absent" : "Leave"}">${k}</button>`).join("")}</span></li>`).join("")}</ul>`
    : empty(`No students in ${clsName(S.attCls)} yet.`, `<button class="btn" data-act="go" data-v="students">Add students</button>`)}</div>
    ${list.length ? `<div class="savebar"><button class="btn ghost sm" data-act="allPresent">All present</button><span class="grow small muted">${S.attDraft.dirty ? "Unsaved changes" : doc ? "Saved" : ""}</span><button class="btn" data-act="saveAtt" ${S.attDraft.dirty ? "" : "disabled"}>Save</button></div>` : ""}`;
 }
@@ -1477,6 +1478,7 @@ document.addEventListener("input", e => {
 })();
 </script>
 <script src="attendance.js"></script>
+<script src="leave.js"></script>
 <script src="app-supabase.js"></script>
 </body>
 </html>
