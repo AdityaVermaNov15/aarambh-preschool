@@ -9,7 +9,8 @@
 
 const ATT_LIBS = {
   jsqr: "https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js",                 // reads QR codes from the camera
-  qrgen: "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"        // draws QR codes for printing
+  qrgen: "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js",       // draws QR codes for printing
+  exceljs: "https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"     // writes .xlsx files
 };
 const Att = { site: null, siteAsked: false, mode: null, session: [], inCards: false, pick: null, adm: null, flushing: false };
 const Scan = { on: false, onCode: null, detector: null, busy: false, last: "", lastT: 0, cv: null };
@@ -333,6 +334,10 @@ function viewAttSettings() {
     <button class="btn danger block" style="margin-top:10px" data-act="attRegen">Make a new QR (old poster stops working)</button></div></div>
   <div class="section"><h2>3. Student ID cards</h2><div class="card"><p class="small muted" style="margin-bottom:10px">Each card has the child's photo, name, class and a QR with a random code (no personal details inside the QR).</p><button class="btn block" data-act="idCards">🪪 Print ID cards</button></div></div>
   <div class="section"><h2>New phones to approve</h2>${dev.length ? `<ul class="list">${dev.map(x => `<li><div class="grow nm">${esc((Store.get("members", x.uid) || {}).name || "Staff member")}<small>First used ${fmtTime(Date.parse(x.first_seen))}</small></div><button class="btn sm" data-act="attDevOk" data-u="${x.uid}" data-d="${esc(x.device_id)}">Approve</button><button class="icon-btn" data-act="attDevNo" data-u="${x.uid}" data-d="${esc(x.device_id)}" aria-label="Reject">✕</button></li>`).join("")}</ul>` : `<div class="card muted small">No new phones. When a teacher checks in from a different phone, it shows here.</div>`}</div>
+  <div class="section"><h2>Download attendance sheet</h2><form class="card" data-form="attExport">
+    <p class="small muted" style="margin-bottom:10px">Excel file (.xlsx) with staff, student and full scan log sheets.</p>
+    <div class="row">${field("From", inp("from", today().slice(0, 8) + "01", "date", `required max="${today()}"`))}${field("To", inp("to", today(), "date", `required max="${today()}"`))}</div>
+    <button class="btn block">⬇️ Download .xlsx</button></form></div>
   <div class="section"><h2>Missed scans</h2><div class="card"><p class="small muted" style="margin-bottom:10px">Add a check-in or check-out someone forgot. The reason is saved with it.</p><button class="btn ghost block" data-act="attFix">Fix a missed scan</button></div></div>`;
 }
 A.attReload = () => { Att.adm = null; render(true); };
@@ -375,6 +380,83 @@ A.attFix = () => openSheet("Fix a missed scan",
   field("Reason", inp("reason", "", "text", 'required placeholder="e.g. Phone battery was dead"')),
   async fd => { const [kind, id] = fd.get("who").split(":"); await Store.attendance.correct(kind, id, fd.get("date"), fd.get("dir"), fd.get("time"), fd.get("reason").trim());
     Store.attendance.refresh(kind === "staff" ? "attStaff" : "attStudents"); toast("Saved"); }, "Save");
+
+/* ---------- admin: download attendance as .xlsx ---------- */
+const ATT_FLAG_TEXT = { new_device: "New phone", no_device: "No phone ID", late_checkin: "Checked in after closing time",
+  sent_late: "Sent from offline queue", no_arrival_scan: "No arrival scan" };
+const attHM24 = ms => {
+  try { return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: CFG.timeZone }).format(new Date(ms)); }
+  catch { const d = new Date(ms); return z(d.getHours()) + ":" + z(d.getMinutes()); }
+};
+/* stops text such as "=HYPERLINK(...)" from being treated as a formula if the sheet is later saved as CSV */
+const attSafe = v => (typeof v === "string" && /^[=+\-@\t\r]/.test(v)) ? "'" + v : v;
+
+function attGroup(events) {              // one row per person per day: first "in", last "out"
+  const staff = new Map(), kids = new Map();
+  for (const e of events) {
+    const map = e.kind === "staff" ? staff : kids, key = e.att_date + "|" + e.subject_id;
+    let r = map.get(key);
+    if (!r) map.set(key, r = { date: e.att_date, id: e.subject_id, cls: e.cls, in: null, out: null, by: "", flags: new Set(), manual: false });
+    const t = Date.parse(e.at);
+    if (e.direction === "in") { if (r.in === null || t < r.in) r.in = t; }
+    else if (r.out === null || t > r.out) { r.out = t; r.by = e.picked_up_by || ""; }
+    (e.flags || []).forEach(f => r.flags.add(f));
+    if (e.method === "manual") r.manual = true;
+  }
+  return { staff: [...staff.values()], kids: [...kids.values()] };
+}
+function attSheet(wb, name, cols, rows) {
+  const ws = wb.addWorksheet(name, { views: [{ state: "frozen", ySplit: 1 }] });
+  ws.columns = cols.map(([header, key, width]) => ({ header, key, width }));
+  rows.forEach(r => ws.addRow(Object.fromEntries(Object.entries(r).map(([k, v]) => [k, attSafe(v)]))));
+  const h = ws.getRow(1); h.font = { bold: true, color: { argb: "FFFFFFFF" } };
+  h.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF5B3FA0" } };
+  ws.autoFilter = { from: "A1", to: { row: 1, column: cols.length } };
+  return ws;
+}
+async function attExportXlsx(from, to) {
+  const [events] = await Promise.all([Store.attendance.events(from, to), attLoad(ATT_LIBS.exceljs)]);
+  if (!events.length) throw new Error("No attendance records between those dates.");
+  const lateAfter = String(((Att.adm || {}).site || {}).late_after || "").slice(0, 5);
+  const { staff, kids } = attGroup(events);
+  const fl = r => [...r.flags].map(f => ATT_FLAG_TEXT[f] || f).join(", ");
+  const hrs = r => r.in && r.out ? Math.round((r.out - r.in) / 36000) / 100 : "";
+  const nameOf = (coll, id, fallback) => (Store.get(coll, id) || {}).name || fallback;
+
+  const staffRows = staff.map(r => ({ date: r.date, name: nameOf("members", r.id, "Removed staff"),
+    in: r.in ? attClock(r.in) : "", out: r.out ? attClock(r.out) : "", hours: hrs(r),
+    late: r.in && lateAfter && attHM24(r.in) > lateAfter ? "Yes" : "", how: r.manual ? "Corrected by admin" : "QR", flags: fl(r) }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.name.localeCompare(b.name));
+  const kidRows = kids.map(r => ({ date: r.date, cls: clsName(r.cls), name: nameOf("students", r.id, "Removed student"),
+    in: r.in ? attClock(r.in) : "", out: r.out ? attClock(r.out) : "", by: r.by, flags: fl(r) }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.cls.localeCompare(b.cls) || a.name.localeCompare(b.name));
+  const logRows = events.map(e => ({ date: e.att_date, time: attClock(Date.parse(e.at)), kind: e.kind === "staff" ? "Staff" : "Student",
+    name: e.kind === "staff" ? nameOf("members", e.subject_id, "Removed staff") : nameOf("students", e.subject_id, "Removed student"),
+    dir: e.direction === "in" ? (e.kind === "staff" ? "Check-in" : "Arrival") : (e.kind === "staff" ? "Check-out" : "Pickup"),
+    how: e.method === "manual" ? "Corrected by admin" : "QR", by: e.picked_up_by || "", flags: (e.flags || []).map(f => ATT_FLAG_TEXT[f] || f).join(", "), note: e.note || "" }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time));
+
+  const wb = new ExcelJS.Workbook(); wb.creator = "Aarambh Pre School"; wb.created = new Date();
+  attSheet(wb, "Staff", [["Date", "date", 12], ["Name", "name", 26], ["In", "in", 11], ["Out", "out", 11], ["Hours", "hours", 9], ["Late", "late", 7], ["Marked by", "how", 20], ["Flags", "flags", 34]], staffRows);
+  attSheet(wb, "Students", [["Date", "date", 12], ["Class", "cls", 14], ["Name", "name", 26], ["Arrival", "in", 11], ["Pickup", "out", 11], ["Picked up by", "by", 20], ["Flags", "flags", 34]], kidRows);
+  attSheet(wb, "Log", [["Date", "date", 12], ["Time", "time", 11], ["Type", "kind", 9], ["Name", "name", 26], ["Event", "dir", 11], ["Marked by", "how", 20], ["Picked up by", "by", 18], ["Flags", "flags", 30], ["Admin's reason", "note", 36]], logRows);
+
+  const buf = await wb.xlsx.writeBuffer();
+  const url = URL.createObjectURL(new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }));
+  const a = document.createElement("a"); a.href = url; a.download = `aarambh-attendance_${from}_to_${to}.xlsx`;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+F.attExport = async fd => {
+  if (!isAdmin()) throw new Error("Only the admin can download attendance.");
+  const from = String(fd.get("from") || ""), to = String(fd.get("to") || ""), ymd = /^\d{4}-\d{2}-\d{2}$/;
+  if (!ymd.test(from) || !ymd.test(to)) throw new Error("Choose both dates.");
+  if (from > to) throw new Error("'From' must be on or before 'To'.");
+  if (to > today()) throw new Error("'To' can't be in the future.");
+  if ((Date.parse(to) - Date.parse(from)) / 864e5 > 366) throw new Error("Choose 12 months or less.");
+  toast("Preparing the sheet…");
+  await attExportXlsx(from, to);
+  toast("Attendance sheet downloaded");
+};
 
 /* ---------- register the new page ---------- */
 VIEWS.attSettings = viewAttSettings;

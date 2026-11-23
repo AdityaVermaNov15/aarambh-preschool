@@ -216,6 +216,18 @@
       const { data } = await sb.storage.from("media").createSignedUrls([...new Set(paths)], 3600);
       const o = {}; (data || []).forEach(d => { if (d.signedUrl && d.path) o[d.path] = d.signedUrl; }); return o;
     },
+    events: async (from, to) => {   // admin export: paged, only the columns the sheet needs
+      const out = [], step = 1000;
+      for (let i = 0; i < 50; i++) {
+        const { data, error } = await sb.from("att_events")
+          .select("kind,subject_id,direction,at,att_date,cls,method,picked_up_by,flags,note")
+          .gte("att_date", from).lte("att_date", to).order("id").range(i * step, i * step + step - 1);
+        if (error) fail(error);
+        out.push(...data);
+        if (data.length < step) return out;
+      }
+      throw new Error("Too many records for one sheet. Choose a shorter date range.");
+    },
     refresh: c => queueRefetch(c)
   };
 
