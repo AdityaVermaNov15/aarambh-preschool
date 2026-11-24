@@ -11,7 +11,7 @@
   }
   const sb = window.supabase.createClient(URL_, KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false } });
 
-  const TABLE = { attStudents: "att_students", attStaff: "att_staff" };
+  const TABLE = { attStudents: "att_students", attStaff: "att_staff", leaves: "leave_requests" };
   const tbl = c => TABLE[c] || c;
   const COLL = Object.fromEntries(COLLS.map(c => [tbl(c), c]));
   const EMAIL_DOMAIN = "@phone.aarambh-app.in";   // the mobile number is the login ID
@@ -229,6 +229,13 @@
       throw new Error("Too many records for one sheet. Choose a shorter date range.");
     },
     refresh: c => queueRefetch(c)
+  };
+
+  /* ---------- parent-reported leave (server functions in 20261122000000_student_leave.sql) ---------- */
+  Store.leave = {
+    apply: (studentId, from, to, reason) => rpc("apply_leave", { p_student: studentId, p_from: from, p_to: to, p_reason: reason }),
+    cancel: id => rpc("cancel_leave", { p_id: id }),
+    refresh: () => queueRefetch("leaves")
   };
 
   /* ---------- install to home screen ---------- */
