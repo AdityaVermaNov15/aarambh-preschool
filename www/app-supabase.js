@@ -179,11 +179,19 @@
     const { error } = await sb.auth.signInWithPassword({ email: phoneToEmail(e164(fd.get("cc"), fd.get("phone"))), password: fd.get("pass") });
     if (error) throw new Error(authMsg(error));
   };
-  A.logout = async () => { closeMenu(); await sb.auth.signOut(); };
+  Store.logoutNow = () => sb.auth.signOut();
+  A.logout = async () => { closeMenu(); if (typeof Bio !== "undefined") await Bio.disable(); await sb.auth.signOut(); };
   Store.deleteAccount = async () => {
     const { error } = await sb.rpc("delete_my_account");
     if (error) throw new Error(error.message);
+    if (typeof Bio !== "undefined") await Bio.disable();
     await sb.auth.signOut().catch(() => {});
+  };
+  /* small door for biometric.js: read the session, restore one, hear about token changes */
+  Store.authBridge = {
+    getSession: () => sb.auth.getSession(),
+    restore: refreshToken => sb.auth.refreshSession({ refresh_token: refreshToken }),
+    onChange: cb => sb.auth.onAuthStateChange(cb)
   };
 
   /* ---------- QR attendance (server functions in 20261121000000_qr_attendance.sql) ---------- */
