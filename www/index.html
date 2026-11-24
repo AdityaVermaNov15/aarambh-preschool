@@ -218,6 +218,9 @@ input[type=file]{width:100%;font-size:.9rem}
 @media (prefers-reduced-motion:no-preference){.sheet{animation:up .22s ease-out}@keyframes up{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}}
 
 /* auth */
+#bioLock{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+#bioLock .biobox{max-width:340px;width:100%;text-align:center}
+#bioLock img{border-radius:50%;margin-bottom:12px}
 .auth{max-width:440px;margin:0 auto;padding:28px 20px 40px}
 .auth .logo{width:150px;height:150px;margin:0 auto 10px;border-radius:50%;background:#fff;object-fit:cover;box-shadow:var(--shadow)}
 .auth h1{text-align:center}
@@ -1153,6 +1156,7 @@ function viewProfile() {
   ${CFG.privacyUrl ? `<div class="card row"><div class="grow"><b>Privacy</b><p class="small muted">How the school uses your and your child's information.</p></div><a class="btn sm ghost" href="${esc(CFG.privacyUrl)}" target="_blank" rel="noopener">Read policy</a></div>` : ""}
   <div class="card"><button class="btn ghost block" data-act="editMe">Edit my name and phone</button>${Store.mode !== "cloud" ? `<button class="btn danger block" style="margin-top:10px" data-act="logout">Log out</button>` : ""}</div>
   <div class="card"><button class="btn danger block" data-act="deleteAccount">Delete my account</button><p class="small muted" style="margin-top:8px">Removes your login, name and phone number. School records such as attendance and fees stay with the school.</p></div>
+  ${typeof bioCard === "function" ? bioCard() : ""}
   ${typeof installCard === "function" ? installCard() : ""}
   <p class="small muted" style="text-align:center;margin-top:16px">Aarambh Pre School · Auspices by R.L.J.D. Group</p></div>`;
 }
@@ -1480,5 +1484,6 @@ document.addEventListener("input", e => {
 <script src="attendance.js"></script>
 <script src="leave.js"></script>
 <script src="app-supabase.js"></script>
+<script src="biometric.js"></script>
 </body>
 </html>
